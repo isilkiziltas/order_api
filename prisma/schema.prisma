@@ -13,25 +13,38 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
 model Order {
   id          String      @id @default(uuid())
   userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalAmount Float
-  status      OrderStatus @default(PENDING)
+  status      OrderStatus @default(PENDING) // String yerine OrderStatus
+  items       OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  items       OrderItem[]
-
-  @@map("orders")
 }
 
 model OrderItem {
   id        String   @id @default(uuid())
   orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
   quantity  Int
   unitPrice Float
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@map("order_items")
+  createdAt DateTime @default(now())
 }

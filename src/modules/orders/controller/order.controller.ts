@@ -1,38 +1,49 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import { OrderService } from '../service/order.service.js';
-import { CreateOrderDTO } from '../dtos/create-order.dto.js';
+import { catchAsync } from '../../../core/utils/catch-async.js';
 import { AppError } from '../../../core/app-error.js';
 
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
-  create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const order = await this.orderService.createOrder(req.body as CreateOrderDTO);
-      res.status(201).json({
-        status: 'success',
-        data: { order },
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
+  createOrder = catchAsync(async (req: Request, res: Response) => {
+    const orderData = {
+      ...req.body,
+      userId: req.user!.userId,
+    };
 
-  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { id } = req.params;
+    const order = await this.orderService.createOrder(orderData);
+    
+    res.status(201).json({
+      success: true,
+      data: order,
+    });
+  });
 
-      if (!id || typeof id !== 'string') {
-        throw new AppError('Geçersiz sipariş ID parametresi.', 400);
-      }
+ getOrderById = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  // req.user bilgisini Service katmanına gönder
+  const order = await this.orderService.getOrderById(id, req.user!);
 
-      const order = await this.orderService.getOrderById(id);
-      res.status(200).json({
-        status: 'success',
-        data: { order },
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
+  res.status(200).json({
+    success: true,
+    data: order,
+  });
+});
+updateStatus = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!status) {
+    throw new AppError('Durum (status) alanı zorunludur.', 400);
+  }
+
+  const updatedOrder = await this.orderService.updateOrderStatus(id, status);
+
+  res.status(200).json({
+    success: true,
+    data: updatedOrder,
+  });
+});
 }

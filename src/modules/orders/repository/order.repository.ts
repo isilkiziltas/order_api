@@ -1,4 +1,5 @@
-import { prisma } from '../../../lib/prisma.js'; // Prisma client'ı nerede oluşturduğuna göre bu yolu ayarlayabilirsin
+import { prisma } from '../../../lib/prisma.js';
+import { Order, OrderStatus } from '@prisma/client';
 
 export class PrismaOrderRepository {
   
@@ -36,6 +37,14 @@ export class PrismaOrderRepository {
     return await prisma.order.findMany({
       include: { items: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateStatus(id: string, status: OrderStatus): Promise<Order> {
+    return await prisma.order.update({
+      where: { id },
+      data: { status },
+      include: { items: true },
     });
   }
 }

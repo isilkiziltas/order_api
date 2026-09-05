@@ -1,20 +1,19 @@
 import { Router } from 'express';
-import { PrismaOrderRepository } from './repository/order.repository.js';
-import { OrderService } from './service/order.service.js';
 import { OrderController } from './controller/order.controller.js';
-import { validateRequest } from '../../middlewares/validate.middleware.js';
-import { createOrderSchema } from './dtos/create-order.dto.js';
-
-export const orderRouter = Router();
+import { OrderService } from './service/order.service.js';
+import { PrismaOrderRepository } from './repository/order.repository.js';
+import { authenticate, authorize } from '../../middlewares/auth.middleware.js';
 
 const orderRepository = new PrismaOrderRepository();
 const orderService = new OrderService(orderRepository);
 const orderController = new OrderController(orderService);
 
-orderRouter.post(
-  '/',
-  validateRequest({ body: createOrderSchema }),
-  orderController.create
-);
+export const orderRouter = Router();
 
-orderRouter.get('/:id', orderController.getById);
+// Bu rotanın altındaki tüm sipariş işlemleri token gerektirir
+orderRouter.use(authenticate);
+
+orderRouter.post('/', orderController.createOrder);
+orderRouter.get('/:id', orderController.getOrderById);
+
+orderRouter.patch('/:id/status', authorize('ADMIN'), orderController.updateStatus);

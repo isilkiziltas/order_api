@@ -1,17 +1,20 @@
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+export type OrderStatus = string;
 
-export interface OrderItem {
+export interface OrderItemEntity {
+  id?: string;
+  orderId?: string;
   productId: string;
   quantity: number;
   unitPrice: number;
+  createdAt?: Date;
 }
 
 export interface Order {
   id: string;
   userId: string;
-  items: OrderItem[];
   totalAmount: number;
-  status: OrderStatus;
+  status: OrderStatus; // string yerine doğrudan OrderStatus enum'ı
+  items: OrderItemEntity[];
   createdAt: Date;
   updatedAt: Date;
 }

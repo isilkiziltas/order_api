@@ -3,11 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "postinstall": "prisma skills sync || exit 0",
-    "db:push": "prisma db push"
+    "postinstall": "prisma generate",
+    "build": "prisma generate && tsc",
+    "start": "node dist/app.js",
+    "dev": "tsx watch src/app.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

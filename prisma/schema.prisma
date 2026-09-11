@@ -28,12 +28,23 @@ model User {
   orders    Order[]
 }
 
+model Product {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  stock       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+}
+
 model Order {
   id          String      @id @default(uuid())
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalAmount Float
-  status      OrderStatus @default(PENDING) // String yerine OrderStatus
+  status      OrderStatus @default(PENDING)
   items       OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -44,6 +55,7 @@ model OrderItem {
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
+  product   Product  @relation(fields: [productId], references: [id])
   quantity  Int
   unitPrice Float
   createdAt DateTime @default(now())

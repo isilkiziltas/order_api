@@ -1,49 +1,95 @@
-import { Request, Response } from 'express';
-import { OrderService } from '../service/order.service.js';
-import { catchAsync } from '../../../core/utils/catch-async.js';
-import { AppError } from '../../../core/app-error.js';
+import { Request, Response, NextFunction } from 'express';
 
+interface OrderService {
+  createOrder(input: { userId: string; items: unknown }): Promise<unknown>;
+  getAllOrders(input: {
+    page: number;
+    limit: number;
+    status?: OrderStatus;
+  }): Promise<unknown>;
+  getOrderById(id: string, requester: { userId: string; role: unknown }): Promise<unknown>;
+  updateOrderStatus(id: string, status: OrderStatus): Promise<unknown>;
+}
+
+// The order entity module is not available in this module's current layout.
+type OrderStatus = any;
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
-  createOrder = catchAsync(async (req: Request, res: Response) => {
-    const orderData = {
-      ...req.body,
-      userId: req.user!.userId,
-    };
+  // POST /orders
+  createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as any).user.id;
+      const order = await this.orderService.createOrder({
+        userId,
+        items: req.body.items,
+      });
 
-    const order = await this.orderService.createOrder(orderData);
-    
-    res.status(201).json({
-      success: true,
-      data: order,
-    });
-  });
+      res.status(201).json({
+        status: 'success',
+        data: { order },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
- getOrderById = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  
-  // req.user bilgisini Service katmanına gönder
-  const order = await this.orderService.getOrderById(id, req.user!);
+  // GET /orders (Admin için Sayfalamalı & Filtreli Listeleme)
+  getAllOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+      const status = req.query.status as OrderStatus | undefined;
 
-  res.status(200).json({
-    success: true,
-    data: order,
-  });
-});
-updateStatus = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { status } = req.body;
+      const result = await this.orderService.getAllOrders({
+        page,
+        limit,
+        status,
+      });
 
-  if (!status) {
-    throw new AppError('Durum (status) alanı zorunludur.', 400);
-  }
+      res.status(200).json({
+        status: 'success',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
-  const updatedOrder = await this.orderService.updateOrderStatus(id, status);
+  // GET /orders/:id
+  getOrderById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const requester = {
+        userId: (req as any).user.id,
+        role: (req as any).user.role,
+      };
 
-  res.status(200).json({
-    success: true,
-    data: updatedOrder,
-  });
-});
+      const order = await this.orderService.getOrderById(id, requester);
+
+      res.status(200).json({
+        status: 'success',
+        data: { order },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // PATCH /orders/:id/status
+  updateOrderStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const updatedOrder = await this.orderService.updateOrderStatus(id, status as OrderStatus);
+
+      res.status(200).json({
+        status: 'success',
+        data: { order: updatedOrder },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

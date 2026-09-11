@@ -1,8 +1,14 @@
-import { randomUUID } from 'crypto';
 import { CreateOrderDTO } from '../dtos/create-order.dto.js';
 import { PrismaOrderRepository } from '../repository/order.repository.js';
 import { AppError } from '../../../core/app-error.js';
-import { Order, OrderStatus } from '../domain/order.entity.js';
+import { Order } from '../domain/order.entity.js';
+import { OrderStatus } from '@prisma/client';
+
+export interface ListOrdersParams {
+  page: number;
+  limit: number;
+  status?: OrderStatus;
+}
 
 export class OrderService {
   constructor(private readonly orderRepository: PrismaOrderRepository) {}
@@ -16,18 +22,45 @@ export class OrderService {
       throw new AppError('Sipariş toplam tutarı geçersiz.', 400);
     }
 
-    const newOrder = {
-      id: randomUUID(),
-      userId: dto.userId,
-      items: dto.items,
-      totalAmount: Number(totalAmount.toFixed(2)),
-      status: 'PENDING' as OrderStatus,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    try {
+      const createdOrder = await this.orderRepository.createWithStockCheck(
+        dto.userId,
+        dto.items,
+        Number(totalAmount.toFixed(2))
+      );
+      return createdOrder as unknown as Order;
+    } catch (error: any) {
+      if (error.message?.startsWith('PRODUCT_NOT_FOUND:')) {
+        const productId = error.message.split(':')[1];
+        throw new AppError(`ID'si '${productId}' olan ürün bulunamadı.`, 404);
+      }
+      if (error.message?.startsWith('INSUFFICIENT_STOCK:')) {
+        const productName = error.message.split(':')[1];
+        throw new AppError(`'${productName}' için yetersiz stok.`, 400);
+      }
+      throw error;
+    }
+  }
 
-    const createdOrder = await this.orderRepository.create(newOrder.userId, newOrder.items);
-    return createdOrder as unknown as Order;
+  async getAllOrders(params: ListOrdersParams) {
+    const { page, limit, status } = params;
+    const skip = (page - 1) * limit;
+
+    const { total, orders } = await this.orderRepository.findAll({
+      skip,
+      take: limit,
+      status: status as OrderStatus,
+    });
+
+    return {
+      orders: orders as unknown as Order[],
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async updateOrderStatus(id: string, newStatus: OrderStatus): Promise<Order> {

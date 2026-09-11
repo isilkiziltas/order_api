@@ -1,50 +1,110 @@
-import { prisma } from '../../../lib/prisma.js';
-import { Order, OrderStatus } from '@prisma/client';
+import { PrismaClient, OrderStatus } from '@prisma/client';
+
+export interface CreateOrderItemInput {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+}
 
 export class PrismaOrderRepository {
-  
-  async create(userId: string, items: { productId: string; quantity: number; unitPrice: number }[]) {
-    const totalAmount = items.reduce((total, item) => total + (item.quantity * item.unitPrice), 0);
+  constructor(private readonly prisma: PrismaClient) {}
 
-    const order = await prisma.order.create({
-      data: {
-        userId,
-        totalAmount,
-        items: {
-          create: items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-          })),
+  async findById(id: string) {
+    return await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
         },
       },
+    });
+  }
+
+  async updateStatus(id: string, status: OrderStatus) {
+    return await this.prisma.order.update({
+      where: { id },
+      data: { status },
       include: {
         items: true,
       },
     });
-
-    return order;
   }
 
-  async findById(orderId: string) {
-    return await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
+  async findAll(params: { skip: number; take: number; status?: OrderStatus }) {
+    const { skip, take, status } = params;
+    const where = status ? { status } : {};
+
+    const [total, orders] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true,
+          user: {
+            select: { id: true, email: true },
+          },
+        },
+      }),
+    ]);
+
+    return { total, orders };
   }
 
-  async findAll() {
-    return await prisma.order.findMany({
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+  async createWithStockCheck(
+    userId: string,
+    items: CreateOrderItemInput[],
+    totalAmount: number
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Stok kontrolü ve atomik düşüş
+      for (const item of items) {
+        const product = await (tx as any).product.findUnique({
+          where: { id: item.productId },
+        });
 
-  async updateStatus(id: string, status: OrderStatus): Promise<Order> {
-    return await prisma.order.update({
-      where: { id },
-      data: { status },
-      include: { items: true },
+        if (!product) {
+          throw new Error(`PRODUCT_NOT_FOUND:${item.productId}`);
+        }
+
+        if (product.stock < item.quantity) {
+          throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
+        }
+
+        await (tx as any).product.update({
+          where: { id: item.productId },
+          data: {
+            stock: {
+              decrement: item.quantity,
+            },
+          },
+        });
+      }
+
+      // 2. Siparişi oluştur
+      return await tx.order.create({
+        data: {
+          userId,
+          totalAmount,
+          status: 'PENDING',
+          items: {
+            create: items.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+            })),
+          },
+        },
+        include: {
+          items: true,
+        },
+      });
     });
   }
 }
